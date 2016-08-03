@@ -28,7 +28,9 @@ Then run the following commands to train and evaluate the **fasttext** model:
 $ th main.lua -corpus_train data/ag_news_csv/train.csv -corpus_test data/ag_news_csv/test.csv -dim 10 -minfreq 10 -stream 0 -epochs 5 -suffix 1 -n_classes 4 -n_gram 1 -decay 0 -lr 0.5
 ```
 
-The trained model can get an accuracy of 90.93% on the g_news_csv dataset using only the unigram word embeddings.
+If the dataset is too large to fit in the memory, try to use the paratemer `-stream 1`.
+
+The trained model can get an accuracy of 90.93% on the g_news_csv dataset using the above configuration.
 
 ## Parameters
 
@@ -36,29 +38,29 @@ The trained model can get an accuracy of 90.93% on the g_news_csv dataset using 
 
 -corpus_test: path of the testing data
 
--minfreq: only those words with frequence higher than this will be used as features
+-minfreq: only those words with frequence higher than this will be used as features, default 10
 
--dim: the embedding dimension
+-dim: the embedding dimension, default 10
 
--lr: learning rate
+-lr: learning rate, default 0.5
 
--min_lr: the minimal learning rate
+-min_lr: the minimal learning rate, default 0.001
 
--decay: whether to decay learning rate, 1 for decay, 0 for no decay
+-decay: whether to decay learning rate, 1 for decay, 0 for no decay, default 0
 
--epochs: number of epochs to go through the training data
+-epochs: number of epochs to go through the training data, default 5
 
--stream: whether to stream the data: 1 for streaming, 0 for store all data in memory, default 1
+-stream: whether to stream the data: 1 for streaming, 0 for store all data in memory, default 0
 
 -suffix: suffix of the model
 
 -n_classes: number of classification categories
 
--n_gram: 1 for unigram, 2 for bigram, 3 for trigram
+-n_gram: 1 for unigram, 2 for bigram, 3 for trigram, default 1
 
--title: whether use the title to generate features
+-title: whether use the title to generate features, default 1
 
--description: whether use the description to generate features
+-description: whether use the description to generate features, default 1
 
 ## To be done
 
