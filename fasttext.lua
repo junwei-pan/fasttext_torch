@@ -16,12 +16,14 @@ function FastText:__init(config)
     self.n_classes = tonumber(config.n_classes) -- number of classification classes
     self.labels = torch.zeros(self.n_classes)
     self.lr = config.lr -- learning rate, decayed each epoch
+    self.flag_decay = config.flag_decay -- the flag of whether to decay the learning rate or not
     self.min_lr = config.min_lr -- minimum of the learning rate
     self.vocab = {} -- vocabulary
     self.index2word = {} -- mapping: index -> word
     self.word2index = {} -- mapping: word -> index
     self.title = config.title -- whether to use the title as features
     self.description = config.description -- whether to use the description as features
+    self.n_gram = config.n_gram
 end
 
 -- Build vocab frequency, word2index, and index2word from input file
@@ -127,7 +129,7 @@ function FastText:streaming(corpus, mode)
 	end
         c = c + 1
 	if mode == "train" then
-            self.lr = math.max(self.min_lr, self.lr + self.decay) 
+            if self.flag_decay == 1 then self.lr = math.max(self.min_lr, self.lr + self.decay) end
             if c % 10000 == 0 then
 	        print(string.format("%d words trained in %.2f seconds. Learning rate: %.4f", c, sys.clock() - start, self.lr))
 	    end
@@ -246,6 +248,24 @@ function FastText:delete_punc(string)
     return res
 end
 
+function FastText:add_bigram(t)
+    for idx = 1, #t - 1 do
+        word_current = t[idx]
+        word_next = t[idx + 1]
+        t[#t + 1] = word_current .. " " .. word_next
+    end
+    return t
+end
+
+function FastText:add_trigram(t)
+    for idx = 1, #t - 2 do
+        word_current = t[idx]
+        word_next = t[idx + 1]
+	word_next_next = t[idx + 2]
+        t[#t + 1] = word_current .. " " .. word_next .. " " .. word_next_next
+    end
+    return t
+end
 -- split each line to get a table where:
 -- t[1] is the class
 -- t[2] and t[3] is a table of words for title and descriptions respectively.
@@ -263,6 +283,15 @@ function FastText:split_line(input, delimiter)
     t[1] = tonumber(self:delete_punc(t[1]))
     t[2] = self:split_str(self:delete_punc(t[2]), " ")
     t[3] = self:split_str(self:delete_punc(t[3]), " ")
+    assert(self.n_gram == 1 or self.n_gram == 2 or self.n_gram == 3)
+    if self.n_gram >= 2 then
+        t[2] = self:add_bigram(t[2])
+        t[3] = self:add_bigram(t[3])
+    end
+    if self.n_gram == 3 then
+        t[2] = self:add_trigram(t[2])
+        t[3] = self:add_trigram(t[3])
+    end
     return t
 end
 
