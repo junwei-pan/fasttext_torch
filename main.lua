@@ -12,13 +12,13 @@ dofile("fasttext.lua")
 config = {}
 config.corpus_train = "data/ag_news_csv/train.csv" -- train data
 config.corpus_test = "data/ag_news_csv/test.csv" -- test data
-config.dim = 100 -- dimensionality of word embeddings
+config.dim = 10 -- dimensionality of word embeddings
 config.minfreq = 10 --threshold for vocab frequency
-config.lr = 0.025 -- initial learning rate
+config.lr = 0.5 -- initial learning rate
 config.decay = 0 -- whether to decay the learning rate
 config.min_lr = 0.001 -- min learning rate
-config.epochs = 3 -- number of epochs to train
-config.stream = 1 -- 1 = stream from hard drive 0 = copy to memory first
+config.epochs = 5 -- number of epochs to train
+config.stream = 0 -- 1 = stream from hard drive 0 = copy to memory first
 config.n_classes = 4 -- number of classification classes
 config.n_gram = 1 -- n_gram: 1 for unigram, 2 for bigram, 3 for trigram
 config.suffix = "" -- suffix for model id
