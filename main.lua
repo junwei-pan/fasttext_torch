@@ -15,7 +15,7 @@ config.corpus_test = "data/ag_news_csv/test.csv" -- test data
 config.dim = 100 -- dimensionality of word embeddings
 config.minfreq = 10 --threshold for vocab frequency
 config.lr = 0.025 -- initial learning rate
-config.flag_decay = 0 -- whether to decay the learning rate
+config.decay = 0 -- whether to decay the learning rate
 config.min_lr = 0.001 -- min learning rate
 config.epochs = 3 -- number of epochs to train
 config.stream = 1 -- 1 = stream from hard drive 0 = copy to memory first
@@ -33,7 +33,7 @@ cmd:option("-corpus_test", config.corpus_test)
 cmd:option("-minfreq", config.minfreq)
 cmd:option("-dim", config.dim)
 cmd:option("-lr", config.lr)
-cmd:option("-flag_decay", config.flag_decay)
+cmd:option("-decay", config.decay)
 cmd:option("-min_lr", config.min_lr)
 cmd:option("-epochs", config.epochs)
 cmd:option("-stream", config.stream)

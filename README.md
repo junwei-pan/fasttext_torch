@@ -1,5 +1,7 @@
 This is an Torch implementation of fasttext based on A. Joulin's paper [Bag of Tricks for Efficient Text Classification](https://arxiv.org/abs/1607.01759).
+
 Author: Junwei Pan
+
 Email: pandevirus@gmail.com
 
 ## Requirements
@@ -7,7 +9,7 @@ This code is written in Lua and requires [Torch](http://torch.ch/). If you're on
 ```bash
 $ curl -s https://raw.githubusercontent.com/torch/ezinstall/master/install-deps | bash
 $ git clone https://github.com/torch/distro.git ~/torch --recursive
-$ cd ~/torch; 
+$ cd ~/torch
 $ ./install.sh      # and enter "yes" at the end to modify your bashrc
 $ source ~/.bashrc
 ```
@@ -23,10 +25,40 @@ First down load the [sentiment analysis data](https://drive.google.com/drive/u/0
 
 Then run the following commands to train and evaluate the **fasttext** model:
 ```bash
-$ th main.lua -corpus_train data/ag_news_csv/train.csv -corpus_test data/ag_news_csv/test.csv -dim 10 -minfreq 10 -stream 1 -epochs 5 -suffix 1 -n_classes 4 -n_gram 1 -flag_decay 0 -lr 0.25
+$ th main.lua -corpus_train data/ag_news_csv/train.csv -corpus_test data/ag_news_csv/test.csv -dim 10 -minfreq 10 -stream 0 -epochs 5 -suffix 1 -n_classes 4 -n_gram 1 -decay 0 -lr 0.5
 ```
 
 The trained model can get an accuracy of 90.93% on the g_news_csv dataset using only the unigram word embeddings.
+
+## Parameters
+
+-corpus_train: path of the training data
+
+-corpus_test: path of the testing data
+
+-minfreq: only those words with frequence higher than this will be used as features
+
+-dim: the embedding dimension
+
+-lr: learning rate
+
+-min_lr: the minimal learning rate
+
+-decay: whether to decay learning rate, 1 for decay, 0 for no decay
+
+-epochs: number of epochs to go through the training data
+
+-stream: whether to stream the data: 1 for streaming, 0 for store all data in memory, default 1
+
+-suffix: suffix of the model
+
+-n_classes: number of classification categories
+
+-n_gram: 1 for unigram, 2 for bigram, 3 for trigram
+
+-title: whether use the title to generate features
+
+-description: whether use the description to generate features
 
 ## To be done
 

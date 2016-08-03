@@ -16,7 +16,7 @@ function FastText:__init(config)
     self.n_classes = tonumber(config.n_classes) -- number of classification classes
     self.labels = torch.zeros(self.n_classes)
     self.lr = config.lr -- learning rate, decayed each epoch
-    self.flag_decay = config.flag_decay -- the flag of whether to decay the learning rate or not
+    self.decay = config.decay -- the flag of whether to decay the learning rate or not
     self.min_lr = config.min_lr -- minimum of the learning rate
     self.vocab = {} -- vocabulary
     self.index2word = {} -- mapping: index -> word
@@ -24,6 +24,8 @@ function FastText:__init(config)
     self.title = config.title -- whether to use the title as features
     self.description = config.description -- whether to use the description as features
     self.n_gram = config.n_gram
+    self.lst_tensor_word_idx = {}
+    self.lst_labels = {}
 end
 
 -- Build vocab frequency, word2index, and index2word from input file
@@ -31,7 +33,7 @@ function FastText:build_vocab(corpus)
     print("Building vocabulary...")
     local start = sys.clock()
     local f = io.open(corpus, "r")
-    local n_line = 1
+    local n_line = 0
     for line in f:lines() do
 	t = self:split_line(line)
         for _, word in ipairs(t[2]) do
@@ -73,7 +75,7 @@ function FastText:build_vocab(corpus)
     self.fasttext:add(self.mean_word)
     self.fasttext:add(nn.Linear(self.dim, self.n_classes))
     self.fasttext:add(nn.Sigmoid())
-    self.decay = (self.min_lr - self.lr) / n_line -- decay learning rate
+    self.decay_delta = (self.min_lr - self.lr) / n_line -- decay learning rate
 end
 
 -- Train on sentences that are streamed from the hard drive
@@ -121,7 +123,7 @@ function FastText:streaming(corpus, mode)
 	    tensor_word_idx[idx1] = t_word_idx[idx1]
 	end
 	if mode == "train" then
-            self:train_one_sentence(tensor_word_idx)
+            self:train_one_sentence(tensor_word_idx, self.labels)
 	elseif mode == "test" then
 	    t_score = self:predict(tensor_word_idx)
 	    flag_correct = self:evaluate(t_score, class)
@@ -129,7 +131,7 @@ function FastText:streaming(corpus, mode)
 	end
         c = c + 1
 	if mode == "train" then
-            if self.flag_decay == 1 then self.lr = math.max(self.min_lr, self.lr + self.decay) end
+            if self.decay == 1 then self.lr = math.max(self.min_lr, self.lr + self.decay_delta) end
             if c % 10000 == 0 then
 	        print(string.format("%d words trained in %.2f seconds. Learning rate: %.4f", c, sys.clock() - start, self.lr))
 	    end
@@ -295,49 +297,11 @@ function FastText:split_line(input, delimiter)
     return t
 end
 
--- pre-load data as a torch tensor instead of streaming it. this requires a lot of memory, 
--- so if the corpus is huge you should partition into smaller sets
-function FastText:preload_data(corpus)
-    print("Preloading training corpus into tensors (Warning: this takes a lot of memory)")
-    local start = sys.clock()
-    local c = 0
-    f = io.open(corpus, "r")
-    self.train_words = {}; self.train_contexts = {}
-    for line in f:lines() do
-        sentence = self:split(line)
-        for i, word in ipairs(sentence) do
-	    word_idx = self.word2index[word]
-	    if word_idx ~= nil then -- word exists in vocab
-    	        local reduced_window = torch.random(self.window) -- pick random window size
-		self.word[1] = word_idx -- update current word
-                for j = i - reduced_window, i + reduced_window do -- loop through contexts
-	            local context = sentence[j]
-		    if context ~= nil and j ~= i then -- possible context
-		        context_idx = self.word2index[context]
-			if context_idx ~= nil then -- valid context
-			    c = c + 1
-  		            self:sample_contexts(context_idx) -- update pos/neg contexts
-			    if self.gpu==1 then
-			        self.train_words[c] = self.word:clone():cuda()
-			        self.train_contexts[c] = self.contexts:clone():cuda()
-			    else
-				self.train_words[c] = self.word:clone()
-				self.train_contexts[c] = self.contexts:clone()
-			    end
-			end
-		    end
-	       end	      
-	    end
-	end
-    end
-    print(string.format("%d word-contexts processed in %.2f seconds", c, sys.clock() - start))
-end
-
 -- Train on word context pairs
-function FastText:train_one_sentence(tensor_word_idx)
+function FastText:train_one_sentence(tensor_word_idx, labels)
     local p = self.fasttext:forward(tensor_word_idx)
-    local loss = self.criterion:forward(p, self.labels)
-    local dl_dp = self.criterion:backward(p, self.labels)
+    local loss = self.criterion:forward(p, labels)
+    local dl_dp = self.criterion:backward(p, labels)
     self.fasttext:zeroGradParameters()
     self.fasttext:backward(tensor_word_idx, dl_dp)
     self.fasttext:updateParameters(self.lr)
@@ -363,14 +327,57 @@ function FastText:evaluate(t_score, class)
     if index == class then return 1 else return 0 end
 end
 
+function FastText:preload_data(corpus)
+    print("Loading the data into the memory")
+    local start = sys.clock()
+    local c = 0
+    self.lst_labels = {}
+    self.lst_tensor_word_idx = {}
+    f = io.open(corpus, "r")
+    for line in f:lines() do
+        c = c + 1
+        t = self:split_line(line)
+	class = t[1]
+	labels = torch.zeros(self.n_classes)
+	labels[class] = 1
+	self.lst_labels[c] = labels
+	t_word_idx = {}
+	idx = 0
+	if self.title == 1 then
+	    for _, word in ipairs(t[2]) do
+		word_idx = self.word2index[word]
+		if word_idx ~= nil then 
+		    idx = idx + 1
+		    t_word_idx[idx] = word_idx
+		end
+	    end
+	end
+	if self.description == 1 then
+	    for _, word in ipairs(t[3]) do
+		word_idx = self.word2index[word]
+		if word_idx ~= nil then 
+		    idx = idx + 1
+		    t_word_idx[idx] = word_idx
+		end
+	    end
+	end
+        tensor_word_idx = torch.IntTensor(#t_word_idx)
+        for idx1 = 1, #t_word_idx do
+            tensor_word_idx[idx1] = t_word_idx[idx1]
+        end
+        self.lst_tensor_word_idx[c] = tensor_word_idx
+    end
+    print(string.format("%d lines loaded in the memory in %.2f seconds", c, sys.clock() - start))
+end
+
 -- train from memory. this is needed to speed up GPU training
 function FastText:train_mem()
     local start = sys.clock()
-    for i = 1, #self.train_words do
-        self:train_one_sentence(self.train_words[i], self.train_contexts[i])
-	self.lr = math.max(self.min_lr, self.lr + self.decay)
-	if i % 100000 == 0 then
-            print(string.format("%d words trained in %.2f seconds. Learning rate: %.4f", i, sys.clock() - start, self.lr))
+    for i = 1, #self.lst_labels do
+        self:train_one_sentence(self.lst_tensor_word_idx[i], self.lst_labels[i])
+	if self.decay == 1 then self.lr = math.max(self.min_lr, self.lr + self.decay_delta) end
+        if i % 10000 == 0 then
+            print(string.format("%d sentences trained in %.2f seconds. Learning rate: %.4f", i, sys.clock() - start, self.lr))
 	end
     end    
 end
@@ -387,15 +394,7 @@ end
 
 -- test the model using config parameters
 function FastText:test_model(corpus)
-    if self.gpu == 1 then
-        self:cuda()
-    end
-    if self.stream == 1 then
-        self:streaming(corpus, "test")
-    else
-        self:preload_data(corpus)
-	self:train_mem()
-    end
+    self:streaming(corpus, "test")
 end
 
 -- save model to disc
