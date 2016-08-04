@@ -21,7 +21,7 @@ $ luarocks install nn
 
 ## Usage
 
-First down load the [sentiment analysis data](https://drive.google.com/drive/u/0/folders/0Bz8a_Dbh9Qhbfll6bVpmNUtUcFdjYmF2SEpmZUZUcVNiMUw1TWN6RDV3a0JHT3kxLVhVR2M) mentioned in Xiang Zhang's paper: [Character-level Convolutional Networks for Text Classification](http://arxiv.org/abs/1509.01626). We use the ag_news_csv dataset for training and evaluation. 
+First down load the [text classification data](https://drive.google.com/drive/u/0/folders/0Bz8a_Dbh9Qhbfll6bVpmNUtUcFdjYmF2SEpmZUZUcVNiMUw1TWN6RDV3a0JHT3kxLVhVR2M) mentioned in Xiang Zhang's paper: [Character-level Convolutional Networks for Text Classification](http://arxiv.org/abs/1509.01626). We use the ag_news_csv dataset for training and evaluation. 
 
 Then run the following commands to train and evaluate the **fasttext** model:
 ```bash
