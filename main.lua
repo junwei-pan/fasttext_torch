@@ -19,7 +19,6 @@ config.decay = 0 -- whether to decay the learning rate
 config.min_lr = 0.001 -- min learning rate
 config.epochs = 5 -- number of epochs to train
 config.stream = 0 -- 1 = stream from hard drive 0 = copy to memory first
-config.n_classes = 4 -- number of classification classes
 config.n_gram = 1 -- n_gram: 1 for unigram, 2 for bigram, 3 for trigram
 config.suffix = "" -- suffix for model id
 config.title = 1  -- whether to use title
@@ -38,7 +37,6 @@ cmd:option("-min_lr", config.min_lr)
 cmd:option("-epochs", config.epochs)
 cmd:option("-stream", config.stream)
 cmd:option("-suffix", config.suffix)
-cmd:option("-n_classes", config.n_classes)
 cmd:option("-n_gram", config.n_gram)
 cmd:option("-title", config.title)
 cmd:option("-description", config.description)
@@ -61,8 +59,6 @@ for k = 1, config.epochs do
     m:train_model(config.corpus_train)
     m:test_model(config.corpus_test)
 end
-
-m:print_sim_words({"one", "second", "city", "man", "china"}, 10)
 
 -- Save the model as well as the word vectors
 path_model = 'model/model_'  .. config.suffix

@@ -13,7 +13,7 @@ function FastText:__init(config)
     self.minfreq = config.minfreq -- minimal frequence of words to build into bocanulary
     self.dim = config.dim -- dimensions of word embeddings
     self.criterion = nn.BCECriterion() -- logistic loss
-    self.n_classes = tonumber(config.n_classes) -- number of classification classes
+    self.n_classes = 0 -- number of classification classes
     self.labels = torch.zeros(self.n_classes)
     self.lr = config.lr -- learning rate, decayed each epoch
     self.decay = config.decay -- the flag of whether to decay the learning rate or not
@@ -34,8 +34,11 @@ function FastText:build_vocab(corpus)
     local start = sys.clock()
     local f = io.open(corpus, "r")
     local n_line = 0
+    self.uniq_labels = {}
     for line in f:lines() do
-	t = self:split_line(line)
+	t = self:ParseCSVLine(line)
+	label = t[1]
+	if self.uniq_labels[label] == nil then self.uniq_labels[label] = 1 end
         for _, word in ipairs(t[2]) do
 	    if self.vocab[word] == nil then
 	        self.vocab[word] = 1	 
@@ -53,10 +56,12 @@ function FastText:build_vocab(corpus)
         n_line = n_line + 1
     end
     f:close()
+    self.n_classes = 0
+    for _ in pairs(self.uniq_labels) do self.n_classes = self.n_classes + 1 end
     -- Delete words that do not meet the minfreq threshold and create word indices
     for word, count in pairs(self.vocab) do
     	if count >= self.minfreq then
-     	    self.index2word[#self.index2word+1] = word
+     	    self.index2word[#self.index2word + 1] = word
             self.word2index[word] = #self.index2word	    
     	else
 	    self.vocab[word] = nil
@@ -92,9 +97,9 @@ function FastText:streaming(corpus, mode)
     local n_correct = 0.0
     f = io.open(corpus, "r")
     for line in f:lines() do
-        t = self:split_line(line)
+        t = self:ParseCSVLine(line)
 	-- set up the label
-	class = t[1]
+	class = tonumber(t[1])
 	self.labels = torch.zeros(self.n_classes)
 	self.labels[class] = 1
 	-- set up all indexs of words in the text(either title or description or both)
@@ -268,47 +273,77 @@ function FastText:add_trigram(t)
     end
     return t
 end
+
 -- split each line to get a table where:
 -- t[1] is the class
 -- t[2] and t[3] is a table of words for title and descriptions respectively.
-function FastText:split_line(input, delimiter)
-    t = {}
-    idx = 0
-    delimiter = "\",\""
-    input = string.lower(input)
-    lst_word = self:split_str(input, delimiter)
-    for _, word in ipairs(lst_word) do
-        idx = idx + 1
-	t[idx] = word
-    end
-    assert(idx == 3)
-    t[1] = tonumber(self:delete_punc(t[1]))
-    t[2] = self:split_str(self:delete_punc(t[2]), " ")
-    t[3] = self:split_str(self:delete_punc(t[3]), " ")
+function FastText:ParseCSVLine(line, sep) 
+    local res = {}
+    local pos = 1
+    sep = sep or ','
+    while true do 
+        local c = string.sub(line,pos,pos)
+        if (c == "") then break end
+        if (c == '"') then
+	    -- quoted value (ignore separator within)
+	    local txt = ""
+	    repeat
+	        local startp,endp = string.find(line,'^%b""',pos)
+	        txt = txt..string.sub(line,startp+1,endp-1)
+	        pos = endp + 1
+	        c = string.sub(line,pos,pos) 
+	        if (c == '"') then txt = txt..'"' end 
+	        -- check first char AFTER quoted string, if it is another
+	        -- quoted string without separator, then append it
+	        -- this is the way to "escape" the quote char in a quote. example:
+	        --   value1,"blub""blip""boing",value3  will result in blub"blip"boing  for the middle
+	    until (c ~= '"')
+	    table.insert(res,txt)
+	    assert(c == sep or c == "")
+	    pos = pos + 1
+        else
+	    -- no quotes used, just look for the first separator
+	    local startp,endp = string.find(line,sep,pos)
+	    if (startp) then 
+	        table.insert(res,string.sub(line,pos,startp-1))
+	        pos = endp + 1
+	    else
+	        -- no separator found -> use rest of string and terminate
+	        table.insert(res,string.sub(line,pos))
+	        break
+	    end 
+        end
+     end
+    assert(#res == 3)
+    res[2] = self:split_str(self:delete_punc(res[2]), " ")
+    res[3] = self:split_str(self:delete_punc(res[3]), " ")
     assert(self.n_gram == 1 or self.n_gram == 2 or self.n_gram == 3)
     if self.n_gram >= 2 then
-        t[2] = self:add_bigram(t[2])
-        t[3] = self:add_bigram(t[3])
+        res[2] = self:add_bigram(res[2])
+        res[3] = self:add_bigram(res[3])
     end
     if self.n_gram == 3 then
-        t[2] = self:add_trigram(t[2])
-        t[3] = self:add_trigram(t[3])
+        res[2] = self:add_trigram(res[2])
+        res[3] = self:add_trigram(res[3])
     end
-    return t
+   return res
 end
 
 -- Train on word context pairs
 function FastText:train_one_sentence(tensor_word_idx, labels)
-    local p = self.fasttext:forward(tensor_word_idx)
-    local loss = self.criterion:forward(p, labels)
-    local dl_dp = self.criterion:backward(p, labels)
-    self.fasttext:zeroGradParameters()
-    self.fasttext:backward(tensor_word_idx, dl_dp)
-    self.fasttext:updateParameters(self.lr)
+    if tensor_word_idx:nDimension() > 0 then
+        local p = self.fasttext:forward(tensor_word_idx)
+        local loss = self.criterion:forward(p, labels)
+        local dl_dp = self.criterion:backward(p, labels)
+        self.fasttext:zeroGradParameters()
+        self.fasttext:backward(tensor_word_idx, dl_dp)
+        self.fasttext:updateParameters(self.lr)
+    end
 end
 
 -- Test on test data
 function FastText:predict(tensor_word_idx)
+    if tensor_word_idx:dim() <= 0 then tensor_word_idx = torch.IntTensor(10); tensor_word_idx:fill(1) end
     local p = self.fasttext:forward(tensor_word_idx)
     return p
 end
@@ -336,7 +371,7 @@ function FastText:preload_data(corpus)
     f = io.open(corpus, "r")
     for line in f:lines() do
         c = c + 1
-        t = self:split_line(line)
+        t = self:ParseCSVLine(line)
 	class = t[1]
 	labels = torch.zeros(self.n_classes)
 	labels[class] = 1
